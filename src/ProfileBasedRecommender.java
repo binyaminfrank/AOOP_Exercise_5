@@ -1,0 +1,36 @@
+
+import java.util.*;
+import java.util.stream.Collector;
+import java.util.stream.Collectors;
+
+import static java.util.stream.Collectors.*;
+
+/** Profile‑based recommender implementation. */
+class ProfileBasedRecommender<T extends Item> extends RecommenderSystem<T> {
+    public ProfileBasedRecommender(Map<Integer, User> users,
+                                   Map<Integer, T> items,
+                                   List<Rating<T>> ratings) {
+        super(users, items, ratings);
+    }
+
+    @Override
+    public List<T> recommendTop10(int userId) {
+        // TODO: implement
+        Map<Integer, List<Rating<T>>> itemRatings = ratings.stream().collect(Collectors.groupingBy(Rating::getItemId));
+
+
+
+        return null;
+    }
+
+    public List<User> getMatchingProfileUsers(int userId) {
+        // TODO: implement
+
+
+
+
+
+
+        return null;
+    }
+}
