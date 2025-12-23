@@ -18,7 +18,7 @@ public class MainApp {
     public static List<Rating<Book>> ratings;
     public static void main(String[] args) throws IOException {
         initElements();
-        //testRecommenderSystem();
+        testRecommenderSystem();
     }
     public static void initElements() throws IOException {
         // TODO: initialize users, books and ratings
