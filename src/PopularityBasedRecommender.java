@@ -1,4 +1,5 @@
 import java.util.*;
+import java.util.stream.Collectors;
 
 import static java.util.stream.Collectors.*;
 
@@ -14,17 +15,46 @@ class PopularityBasedRecommender<T extends Item> extends RecommenderSystem<T> {
     @Override
     public List<T> recommendTop10(int userId) {
         // TODO: implement
-        List<T> top10 = ratings.stream().collect(groupingBy(Rating::getItemId));
-        return null;
+        Set<Integer> ratedByUser = ratings.stream()
+                .filter(r -> r.getUserId() == userId)
+                .map(Rating::getItemId)
+                .collect(Collectors.toSet());
+
+        Map<Integer, List<Rating<T>>> groupByItem = ratings.stream().collect(groupingBy(Rating::getItemId));
+
+        Map<Integer, Double> averages = groupByItem.entrySet()
+                .stream()
+                .filter(e -> getItemRatingsCount(e.getKey()) >= 100)
+                .filter(e -> !ratedByUser.contains(e.getKey()))
+                .collect(Collectors.toMap(
+                        Map.Entry::getKey,
+                        e -> getItemAverageRating(e.getKey())));
+
+        List<T> top10 = averages.entrySet().stream()
+                .sorted(Comparator.<Map.Entry<Integer, Double>>comparingDouble(Map.Entry::getValue).reversed()
+                        .thenComparing(e -> getItemRatingsCount(e.getKey()), Comparator.reverseOrder())
+                        .thenComparing(e -> items.get(e.getKey()).getName())
+                )
+                .limit(10)
+                .map(e -> items.get(e.getKey()))
+                .toList();
+        return top10;
     }
 
     public double getItemAverageRating(int itemId) {
-        // TODO: implement
-        return 0;
+        double average = ratings.stream()
+                .filter(r -> r.getItemId() == itemId)
+                .mapToDouble(Rating::getRating)
+                .average()
+                .orElse(0);
+        return average;
     }
     public int getItemRatingsCount(int itemId) {
-        // TODO: implement
-        return 0;
+        long count = ratings.stream()
+                .filter(e -> e.getItemId() == itemId)
+                .count();
+
+        return (int)count;
     }
 
 }
