@@ -22,6 +22,7 @@ class PopularityBasedRecommender<T extends Item> extends RecommenderSystem<T> {
 
         Map<Integer, List<Rating<T>>> groupByItem = ratings.stream().collect(groupingBy(Rating::getItemId));
 
+
         Map<Integer, Double> averages = groupByItem.entrySet()
                 .stream()
                 .filter(e -> getItemRatingsCount(e.getKey()) >= 100)

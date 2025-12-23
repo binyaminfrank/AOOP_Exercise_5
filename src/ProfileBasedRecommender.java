@@ -17,31 +17,36 @@ class ProfileBasedRecommender<T extends Item> extends RecommenderSystem<T> {
     public List<T> recommendTop10(int userId) {
         List<User> matchingUsers = getMatchingProfileUsers(userId);
 
+        Set<Integer> ratedByUser = ratings.stream()
+                .filter(r -> r.getUserId() == userId)
+                .map(Rating::getItemId)
+                .collect(Collectors.toSet());
+
         // convert users -> userIds (so we can filter ratings easily)
         Set<Integer> matchingUserIds = matchingUsers.stream()
                 .map(User::getId)
                 .collect(Collectors.toSet());
 
-        // 1) group ratings by itemId (only from matching users)
-        Map<Integer, List<Rating>> ratingsByItem = ratings.stream()
-                .filter(r -> matchingUserIds.contains(r.getUserId()))
-                .collect(Collectors.groupingBy(Rating::getItemId));
-
-        // 2) keep items with >= 5 ratings, compute avg
-        Map<Integer, Double> avgByItem = ratingsByItem.entrySet().stream()
-                .filter(e -> e.getValue().size() >= 5)
-                .collect(Collectors.toMap(
-                        Map.Entry::getKey,
-                        e -> Double.valueOf(
-                                e.getValue().stream()
-                                        .mapToDouble(Rating::getRating)
-                                        .average()
-                                        .orElse(0.0)
-                        )
-                ));
+        Map<Integer, List<Rating<T>>> groupByItem =
+                ratings.stream()
+                        .filter(r -> matchingUserIds.contains(r.getUserId()))
+                        .collect(Collectors.groupingBy(Rating::getItemId));
 
 
-        return null;
+        //ItemId, Average Ratings
+        Map<Integer, Double> ItemAverageRatings = groupByItem.entrySet().stream()
+                .filter(i -> getItemRatingsCount(i.getKey()) >= 5)
+                .filter(e -> !ratedByUser.contains(e.getKey()))
+                .collect(Collectors.toMap(Map.Entry::getKey, e -> getItemAverageRating(e.getKey())));
+
+        return ItemAverageRatings.entrySet().stream()
+                .sorted(Comparator.<Map.Entry<Integer, Double>>comparingDouble(Map.Entry::getValue).reversed()
+                        .thenComparing(e -> getItemRatingsCount(e.getKey()), Comparator.reverseOrder())
+                        .thenComparing(e -> items.get(e.getKey()).getName())
+                )
+                .limit(10)
+                .map(e -> items.get(e.getKey()))
+                .toList();
     }
 
     public List<User> getMatchingProfileUsers(int userId) {
@@ -57,7 +62,21 @@ class ProfileBasedRecommender<T extends Item> extends RecommenderSystem<T> {
                 .toList();
     }
 
+    public double getItemAverageRating(int itemId) {
+        return  ratings.stream()
+                .filter(r -> r.getItemId() == itemId)
+                .mapToDouble(Rating::getRating)
+                .average()
+                .orElse(0);
+    }
 
+    public long getItemRatingsCount(int itemId) {
+        return ratings.stream()
+                .filter(e -> e.getItemId() == itemId)
+                .count();
+
+
+    }
 
 
 
