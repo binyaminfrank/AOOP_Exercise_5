@@ -32,13 +32,35 @@ class SimilarityBasedRecommender<T extends Item> extends RecommenderSystem<T> {
         System.out.println("Global bias: " + String.format("%.2f", 0.0));
     }
 
+    public Double getGlobalBias(){
+        double globalBias = ratings.stream().mapToDouble(Rating::getRating).average().orElse(0.0);
+        return globalBias;
+    }
+
     public void printItemBias(int itemId) {
         // TODO: fix
         System.out.println("Item bias for item " + itemId + ": " + String.format("%.2f", 0.0));
+    }
+
+    public double getItemBias(int ItemId){
+        double itemBias = ratingsByItem.entrySet()
+                .stream()
+                .filter(r -> r.getKey() == ItemId)
+                .flatMap(e -> e.getValue().stream())
+                .mapToDouble(r -> r.getRating() - getGlobalBias())
+                .average()
+                .orElse(0.0);
+
+        return itemBias;
     }
     public void printUserBias(int userId) {
         // TODO: fix
         System.out.println("User bias for user " + userId + ": " + String.format("%.2f",0.0));
     }
+
+    public double getUserBias(int userId){
+        return 0.0;
+    }
+
 }
 

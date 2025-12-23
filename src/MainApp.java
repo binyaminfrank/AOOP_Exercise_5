@@ -75,7 +75,6 @@ public class MainApp {
                 }
             }
 
-/*
             case "u" -> {
                 SimilarityBasedRecommender<Book> rec = new SimilarityBasedRecommender<>(users, books, ratings);
                 System.out.println("Choose operation: [r] Recommend, [gb] Print global bias, [ub] Print user bias, [ib] Print item bias, " +
@@ -111,7 +110,6 @@ public class MainApp {
                     default -> System.out.println("Unknown operation.");
                 }
             }
-*/
             default -> System.out.println("Unknown recommender type.");
         }
     }
