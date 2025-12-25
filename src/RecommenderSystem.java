@@ -81,7 +81,7 @@ abstract class RecommenderSystem<T extends Item> {
     /**
      * Gets all item IDs that a user has already rated.
      * 
-     * <p>We don't want to recommend items the user has already rated,
+     * We don't want to recommend items the user has already rated,
      * so this helper method makes it easy to filter them out.
      * 
      * @param userId the ID of the user
@@ -97,7 +97,7 @@ abstract class RecommenderSystem<T extends Item> {
     /**
      * Takes a map of scores and returns the top 10 items.
      * 
-     * <p>This is the common "final step" for all recommenders:
+     * This is the common "final step" for all recommenders:
      * <ol>
      *   <li>Sort by score (highest first)</li>
      *   <li>If tied, sort by number of ratings (most first)</li>
@@ -123,7 +123,7 @@ abstract class RecommenderSystem<T extends Item> {
     /**
      * Gets the average rating for an item.
      * 
-     * <p>Uses the pre-computed avgByItem map for efficiency.
+     * Uses the pre-computed avgByItem map for efficiency.
      * 
      * @param itemId the ID of the item
      * @return the average rating, or 0.0 if item not found
@@ -138,7 +138,7 @@ abstract class RecommenderSystem<T extends Item> {
     /**
      * Gets the number of ratings an item has received.
      * 
-     * <p>Uses the pre-computed countByItem map for efficiency.
+     * Uses the pre-computed countByItem map for efficiency.
      * 
      * @param itemId the ID of the item
      * @return the count of ratings, or 0 if item not found
