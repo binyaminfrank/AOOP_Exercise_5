@@ -6,8 +6,6 @@ import java.util.Map;
 import java.util.Scanner;
 import java.util.stream.Collectors;
 
-import static java.util.stream.Collectors.toMap;
-
 public class MainApp {
     // TODO: change the paths to correspond with the location of the files on the local computer
     public static final String USERS_PATH = "src/Users.txt";
@@ -54,8 +52,8 @@ public class MainApp {
                 } else if (op.equals("s")) {
                     System.out.print("Enter item ID: ");
                     int itemId = in.nextInt();
-                    System.out.println("The average rating of " + itemId + " is " +  String.format("%.2f", rec.getItemAverageRating(itemId)) +
-                            ". The number of ratings is " + rec.getItemRatingsCount(itemId) + ".");
+                    System.out.println("The average rating of " + itemId + " is " +  String.format("%.2f", rec.getItemAvg(itemId)) +
+                            ". The number of ratings is " + rec.getItemCount(itemId) + ".");
                 }
             }
 
