@@ -1,16 +1,20 @@
 import java.util.*;
-
 import static java.util.stream.Collectors.*;
 
 /** Similarity-based recommender with bias correction. */
 class SimilarityBasedRecommender<T extends Item> extends RecommenderSystem<T> {
 
-    // thresholds from the instructions
+    // Thresholds from the requirements
+    /** Minimum number of shared items between users to calculate similarity. */
     private static final int MIN_SHARED_ITEMS = 10;
+    
+    /** Number of similar users to consider for recommendations. */
     private static final int TOP_K_SIMILAR_USERS = 10;
+    
+    /** Minimum number of similar users who must have rated an item to recommend it. */
     private static final int MIN_SIM_USERS_PER_ITEM = 5;
 
-    // biases (computed once)
+    // biases 
     private final double globalBias;
     private final Map<Integer, Double> itemBiasByItem; // itemId -> item bias
     private final Map<Integer, Double> userBiasByUser; // userId -> user bias
@@ -23,28 +27,31 @@ class SimilarityBasedRecommender<T extends Item> extends RecommenderSystem<T> {
                                       List<Rating<T>> ratings) {
         super(users, items, ratings);
 
-        // Global bias: average of all ratings
+        // Step 1: Global bias (average of all ratings in the system)
+        // Example: if everyone rates between 1-5, global might be 3.2
         this.globalBias = ratings.stream()
                 .mapToDouble(Rating::getRating)
                 .average()
                 .orElse(0.0);
 
-        // Item bias: avg(rating - globalBias) per item
+        // Step 2: Item bias (how much each item differs from global average)
+        // Example: a great movie might have +0.8 (rated 0.8 higher than average)
         this.itemBiasByItem = ratings.stream()
                 .collect(groupingBy(
                         Rating::getItemId,
                         averagingDouble(r -> r.getRating() - globalBias)
                 ));
 
-        // User bias: avg(rating - globalBias - itemBias(item)) per user
+        // Step 3: User bias (how much each user differs after removing global and item bias)
+        // Example: a harsh critic might have -0.5 (rates 0.5 lower than expected)
         this.userBiasByUser = ratings.stream()
                 .collect(groupingBy(
                         Rating::getUserId,
                         averagingDouble(r -> r.getRating() - globalBias - getItemBias(r.getItemId()))
                 ));
 
-        // Bias-free ratings map:
-        // biasFree = rating - global - itemBias - userBias
+        // Step 4: Calculate bias-free ratings for similarity comparisons
+        // These ratings show if users truly like the same things, ignoring their rating habits
         this.biasFreeRatingsByUser = ratingsByUser.entrySet().stream()
                 .collect(toMap(
                         Map.Entry::getKey, // userId
@@ -58,9 +65,26 @@ class SimilarityBasedRecommender<T extends Item> extends RecommenderSystem<T> {
                 ));
     }
 
-    /** Dot-product similarity; 0 if <10 shared items. */
+    /**
+     * Calculates similarity between two users using dot product.
+     * 
+     * <p>The dot product measures how similarly two users rate items.
+     * Higher value means more similar taste.
+     * 
+     * <p>Example:
+     * <ul>
+     *   <li>User A rates movies [+0.5, -0.2, +0.8] (bias-free)</li>
+     *   <li>User B rates movies [+0.6, -0.3, +0.9] (bias-free)</li>
+     *   <li>Dot product = (0.5×0.6) + (-0.2×-0.3) + (0.8×0.9) = 1.08</li>
+     * </ul>
+     * 
+     * @param u1 the first user's ID
+     * @param u2 the second user's ID
+     * @return similarity score, or 0.0 if they have fewer than 10 shared items
+     */
     public double getSimilarity(int u1, int u2) {
 
+        // Get bias-free ratings for both users
         Map<Integer, Double> biasFreeOne = biasFreeRatingsByUser.entrySet().stream()
                 .filter(e -> e.getKey() == u1)
                 .map(Map.Entry::getValue)
@@ -71,29 +95,44 @@ class SimilarityBasedRecommender<T extends Item> extends RecommenderSystem<T> {
                 .map(Map.Entry::getValue)
                 .reduce(Collections.emptyMap(), (a, b) -> b);
 
+        // Find items both users have rated
         Set<Integer> sharedItems = biasFreeOne.keySet().stream()
                 .filter(biasFreeTwo::containsKey)
                 .collect(toSet());
 
+        // Need at least 10 shared items to calculate meaningful similarity
         if (sharedItems.size() < MIN_SHARED_ITEMS) {
             return 0.0;
         }
 
+        // Calculate dot product: sum of (rating1 × rating2) for each shared item
         return sharedItems.stream()
                 .mapToDouble(itemId -> biasFreeOne.get(itemId) * biasFreeTwo.get(itemId))
                 .sum();
     }
 
+    /**
+     * Recommends top 10 items based on similar users' preferences.
+     * 
+     * <p>Steps:
+     * <ol>
+     *   <li>Find the 10 most similar users</li>
+     *   <li>Look at items those users rated</li>
+     *   <li>Filter for items at least 5 similar users rated</li>
+     *   <li>Predict ratings for those items</li>
+     *   <li>Return top 10 predictions</li>
+     * </ol>
+     * 
+     * @param userId the ID of the user to recommend items for
+     * @return list of top 10 items similar users liked
+     */
     @Override
     public List<T> recommendTop10(int userId) {
 
-        // items already rated by this user (no getOrDefault)
-        Set<Integer> ratedByUser = ratedItemsByUser.entrySet().stream()
-                .filter(e -> e.getKey() == userId)
-                .flatMap(e -> e.getValue().stream())
-                .collect(toSet());
+        // Get items this user already rated (don't recommend those)
+        Set<Integer> ratedByUser = getRatedItemIds(userId);
 
-        // Top 10 similar users
+        // Find top 10 most similar users (by dot product similarity)
         Map<Integer, Double> topSimilarUsers = users.keySet().stream()
                 .filter(otherId -> otherId != userId)
                 .collect(toMap(
@@ -108,7 +147,7 @@ class SimilarityBasedRecommender<T extends Item> extends RecommenderSystem<T> {
 
         Set<Integer> similarUserIds = topSimilarUsers.keySet();
 
-        // Candidate items: at least 5 similar users rated, and user didn't rate
+        // Find candidate items: at least 5 similar users rated it, and user hasn't rated it
         Set<Integer> candidateItemIds = ratings.stream()
                 .filter(r -> similarUserIds.contains(r.getUserId()))
                 .collect(groupingBy(Rating::getItemId, counting()))
@@ -118,39 +157,47 @@ class SimilarityBasedRecommender<T extends Item> extends RecommenderSystem<T> {
                 .filter(itemId -> !ratedByUser.contains(itemId))
                 .collect(toSet());
 
-        // Predict rating for each candidate
+        // Predict rating for each candidate item
         Map<Integer, Double> predictedByItem = candidateItemIds.stream()
                 .collect(toMap(
                         itemId -> itemId,
                         itemId -> predictRating(userId, itemId, topSimilarUsers)
                 ));
 
-        // Sort by predicted desc, tie: more ratings, then name
-        return predictedByItem.entrySet().stream()
-                .sorted(
-                        Comparator.<Map.Entry<Integer, Double>>comparingDouble(Map.Entry::getValue).reversed()
-                                .thenComparing(e -> countByItem.get(e.getKey()), Comparator.reverseOrder())
-                                .thenComparing(e -> items.get(e.getKey()).getName())
-                )
-                .limit(NUM_OF_RECOMMENDATIONS)
-                .map(e -> items.get(e.getKey()))
-                .collect(toList());
+        // Sort and return top 10
+        return top10FromScores(predictedByItem);
     }
 
-    // ---------------- bias printing / getters ----------------
+    // ---------------- Bias getters and printing ----------------
 
+    /** Prints the global bias to console. */
     public void printGlobalBias() {
         System.out.println("Global bias: " + String.format("%.2f", globalBias));
     }
 
+    /**
+     * Gets the global bias (overall average rating).
+     * 
+     * @return the global bias value
+     */
     public Double getGlobalBias() {
         return globalBias;
     }
 
+    /** Prints the item bias to console. */
     public void printItemBias(int itemId) {
         System.out.println("Item bias for item " + itemId + ": " + String.format("%.2f", getItemBias(itemId)));
     }
 
+    /**
+     * Gets the bias for a specific item.
+     * 
+     * <p>Item bias tells us if this item is rated higher or lower than average.
+     * Positive = rated higher, Negative = rated lower.
+     * 
+     * @param itemId the ID of the item
+     * @return the item's bias value, or 0.0 if not found
+     */
     public double getItemBias(int itemId) {
         return itemBiasByItem.entrySet().stream()
                 .filter(e -> e.getKey() == itemId)
@@ -158,10 +205,20 @@ class SimilarityBasedRecommender<T extends Item> extends RecommenderSystem<T> {
                 .reduce(0.0, (a, b) -> b);
     }
 
+    /** Prints the user bias to console. */
     public void printUserBias(int userId) {
         System.out.println("User bias for user " + userId + ": " + String.format("%.2f", getUserBias(userId)));
     }
 
+    /**
+     * Gets the bias for a specific user.
+     * 
+     * <p>User bias tells us if this user rates higher or lower than expected.
+     * Positive = generous rater, Negative = harsh rater.
+     * 
+     * @param userId the ID of the user
+     * @return the user's bias value, or 0.0 if not found
+     */
     public double getUserBias(int userId) {
         return userBiasByUser.entrySet().stream()
                 .filter(e -> e.getKey() == userId)
@@ -169,11 +226,30 @@ class SimilarityBasedRecommender<T extends Item> extends RecommenderSystem<T> {
                 .reduce(0.0, (a, b) -> b);
     }
 
-    // ---------------- prediction helper ----------------
+    // ---------------- Prediction helper ----------------
 
-    // predicted = global + itemBias + userBias + weightedAvg(biasFree of similar users)
+    /**
+     * Predicts what rating a user would give to an item.
+     * 
+     * <p>Formula: predicted = global + itemBias + userBias + weightedAvg(similar users' bias-free ratings)
+     * 
+     * <p>This combines:
+     * <ul>
+     *   <li>Overall average (global bias)</li>
+     *   <li>How this item is typically rated (item bias)</li>
+     *   <li>How this user typically rates (user bias)</li>
+     *   <li>What similar users thought (weighted by their similarity)</li>
+     * </ul>
+     * 
+     * @param userId the user to predict for
+     * @param itemId the item to predict
+     * @param topSimilarUsers map of similar user IDs to their similarity scores
+     * @return predicted rating
+     */
     private double predictRating(int userId, int itemId, Map<Integer, Double> topSimilarUsers) {
 
+        // Calculate weighted sum: similarity × bias-free rating
+        // Only include similar users who actually rated this item
         double numerator = topSimilarUsers.entrySet().stream()
                 .filter(e -> biasFreeRatingsByUser.entrySet().stream()
                         .filter(x -> Objects.equals(x.getKey(), e.getKey()))
@@ -191,6 +267,7 @@ class SimilarityBasedRecommender<T extends Item> extends RecommenderSystem<T> {
                 })
                 .sum();
 
+        // Calculate sum of similarities (for normalization)
         double denominator = topSimilarUsers.entrySet().stream()
                 .filter(e -> biasFreeRatingsByUser.entrySet().stream()
                         .filter(x -> Objects.equals(x.getKey(), e.getKey()))
@@ -199,8 +276,10 @@ class SimilarityBasedRecommender<T extends Item> extends RecommenderSystem<T> {
                 .mapToDouble(Map.Entry::getValue)
                 .sum();
 
+        // Weighted average of bias-free ratings
         double weightedBiasFree = (denominator == 0.0) ? 0.0 : (numerator / denominator);
 
+        // Add back all the biases to get final prediction
         return getGlobalBias()
                 + getItemBias(itemId)
                 + getUserBias(userId)

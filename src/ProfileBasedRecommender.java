@@ -1,8 +1,5 @@
 
 import java.util.*;
-import java.util.stream.Collector;
-import java.util.stream.Collectors;
-
 import static java.util.stream.Collectors.*;
 
 /** Profile‑based recommender implementation. */
@@ -15,43 +12,45 @@ class ProfileBasedRecommender<T extends Item> extends RecommenderSystem<T> {
 
     @Override
     public List<T> recommendTop10(int userId) {
-        List<User> matchingUsers = getMatchingProfileUsers(userId);
 
-        Set<Integer> ratedByUser = ratings.stream()
-                .filter(r -> r.getUserId() == userId)
-                .map(Rating::getItemId)
-                .collect(Collectors.toSet());
+        // Get items this user already rated (don't recommend those)
+        Set<Integer> rated = getRatedItemIds(userId);
 
-        // convert users -> userIds (so we can filter ratings easily)
-        Set<Integer> matchingUserIds = matchingUsers.stream()
+        // Find users with matching profile (same gender, similar age)
+        Set<Integer> matchingUserIds = getMatchingProfileUsers(userId).stream()
                 .map(User::getId)
-                .collect(Collectors.toSet());
+                .collect(toSet());
 
-        Map<Integer, List<Rating<T>>> groupByItem =
+        // Calculate average rating for each item, but only from matching users
+        // Filter: only items with >= 5 ratings, and user hasn't rated
+        Map<Integer, Double> scores =
                 ratings.stream()
                         .filter(r -> matchingUserIds.contains(r.getUserId()))
-                        .collect(Collectors.groupingBy(Rating::getItemId));
+                        .collect(groupingBy(Rating::getItemId, averagingDouble(Rating::getRating)))
+                        .entrySet().stream()
+                        .filter(e -> getItemCount(e.getKey()) >= 5)
+                        .filter(e -> !rated.contains(e.getKey()))
+                        .collect(toMap(Map.Entry::getKey, Map.Entry::getValue));
 
-
-        //ItemId, Average Ratings
-        Map<Integer, Double> ItemAverageRatings = groupByItem.entrySet().stream()
-                .filter(i -> getItemRatingsCount(i.getKey()) >= 5)
-                .filter(e -> !ratedByUser.contains(e.getKey()))
-                .collect(Collectors.toMap(Map.Entry::getKey, e -> getItemAverageRating(e.getKey())));
-
-        return ItemAverageRatings.entrySet().stream()
-                .sorted(Comparator.<Map.Entry<Integer, Double>>comparingDouble(Map.Entry::getValue).reversed()
-                        .thenComparing(e -> getItemRatingsCount(e.getKey()), Comparator.reverseOrder())
-                        .thenComparing(e -> items.get(e.getKey()).getName())
-                )
-                .limit(10)
-                .map(e -> items.get(e.getKey()))
-                .toList();
+        // Sort and return top 10
+        return top10FromScores(scores);
     }
 
+    /**
+     * Finds users with a matching profile.
+     * 
+     * <p>A user matches if they have:
+     * <ul>
+     *   <li>Same gender</li>
+     *   <li>Age within 5 years (older or younger)</li>
+     *   <li>Different user ID (exclude the user themselves)</li>
+     * </ul>
+     * 
+     * @param userId the ID of the user to find matches for
+     * @return list of users with matching profiles
+     */
     public List<User> getMatchingProfileUsers(int userId) {
-        //
-        User currentUser = users.get(Integer.valueOf(userId));
+        User currentUser = users.get(userId);
         String gender = currentUser.getGender();
         int age = currentUser.getAge();
 
@@ -62,26 +61,4 @@ class ProfileBasedRecommender<T extends Item> extends RecommenderSystem<T> {
                 .toList();
     }
 
-    public double getItemAverageRating(int itemId) {
-        return  ratings.stream()
-                .filter(r -> r.getItemId() == itemId)
-                .mapToDouble(Rating::getRating)
-                .average()
-                .orElse(0);
-    }
-
-    public long getItemRatingsCount(int itemId) {
-        return ratings.stream()
-                .filter(e -> e.getItemId() == itemId)
-                .count();
-
-
-    }
-
-
-
 }
-
-
-
-
