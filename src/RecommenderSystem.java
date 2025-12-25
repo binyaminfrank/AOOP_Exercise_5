@@ -15,6 +15,7 @@ abstract class RecommenderSystem<T extends Item> {
     protected final Map<Integer, Long> countByItem;
     protected final Map<Integer, Double> avgByItem;
     protected final Map<Integer, Set<Integer>> ratedItemsByUser;
+    protected final Map<Integer, List<Rating<T>>> ratingsByUser;
 
     protected final int NUM_OF_RECOMMENDATIONS = 10;
 
@@ -53,6 +54,9 @@ abstract class RecommenderSystem<T extends Item> {
                         Rating::getUserId,
                         mapping(Rating::getItemId, toSet())
                 ));
+
+        this.ratingsByUser = ratings.stream()
+                .collect(groupingBy(Rating::getUserId));
 
     }
 
