@@ -30,7 +30,7 @@ public class MainApp {
 
         ratings = Files.lines(Paths.get(RATINGS_PATH))
                 .map(lines -> new Rating<Book>(lines))
-                .toList();
+                .collect(Collectors.toList());
 
     }
     public static void testRecommenderSystem() {

@@ -13,7 +13,7 @@ class ProfileBasedRecommender<T extends Item> extends RecommenderSystem<T> {
     @Override
     public List<T> recommendTop10(int userId) {
 
-        // Get items this user already rated (don't recommend those)
+        // Get items this user already rated
         Set<Integer> rated = getRatedItemIds(userId);
 
         // Find users with matching profile (same gender, similar age)
@@ -21,19 +21,34 @@ class ProfileBasedRecommender<T extends Item> extends RecommenderSystem<T> {
                 .map(User::getId)
                 .collect(toSet());
 
-        // Calculate average rating for each item, but only from matching users
-        // Filter: only items with >= 5 ratings, and user hasn't rated
-        Map<Integer, Double> scores =
+        // Group ratings by item (only from matching users)
+        Map<Integer, List<Rating<T>>> itemRatings =
                 ratings.stream()
                         .filter(r -> matchingUserIds.contains(r.getUserId()))
-                        .collect(groupingBy(Rating::getItemId, averagingDouble(Rating::getRating)))
-                        .entrySet().stream()
-                        .filter(e -> getItemCount(e.getKey()) >= 5)
-                        .filter(e -> !rated.contains(e.getKey()))
-                        .collect(toMap(Map.Entry::getKey, Map.Entry::getValue));
+                        .collect(groupingBy(Rating::getItemId));
+
+        // Calculate average rating for each item
+        Map<Integer, Double> scores = itemRatings.entrySet().stream()
+                .filter(e -> e.getValue().size() >= 5)
+                .filter(e -> !rated.contains(e.getKey()))
+                .collect(toMap(
+                        Map.Entry::getKey,
+                        e -> e.getValue().stream()
+                                .mapToDouble(Rating::getRating)
+                                .average()
+                                .orElse(0.0)
+                ));
 
         // Sort and return top 10
-        return top10FromScores(scores);
+        return scores.entrySet().stream()
+                .sorted(
+                        Comparator.<Map.Entry<Integer, Double>>comparingDouble(Map.Entry::getValue).reversed()
+                                .thenComparing(e -> itemRatings.get(e.getKey()).size(), Comparator.reverseOrder())
+                                .thenComparing(e -> items.get(e.getKey()).getName())
+                )
+                .limit(NUM_OF_RECOMMENDATIONS)
+                .map(e -> items.get(e.getKey()))
+                .collect(toList());
     }
 
     /**
@@ -58,7 +73,7 @@ class ProfileBasedRecommender<T extends Item> extends RecommenderSystem<T> {
                 .filter(u -> u.getGender().equals(gender)) //same gender
                 .filter(u -> Math.abs(u.getAge() - age) <= 5)   // within 5 years
                 .filter(u -> u.getId() != currentUser.getId()) //excludes current user
-                .toList();
+                .collect(toList());
     }
 
 }

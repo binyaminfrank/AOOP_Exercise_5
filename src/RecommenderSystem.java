@@ -149,4 +149,14 @@ abstract class RecommenderSystem<T extends Item> {
                 .map(Map.Entry::getValue)
                 .reduce(0L, (a, b) -> b);
     }
+
+    /** Legacy method name for backward compatibility. */
+    public double getItemAverageRating(int itemId) {
+        return getItemAvg(itemId);
+    }
+
+    /** Legacy method name for backward compatibility. */
+    public long getItemRatingsCount(int itemId) {
+        return getItemCount(itemId);
+    }
 }
